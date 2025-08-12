@@ -16,5 +16,4 @@ docker run -d --name socks5 -p 1099:1080 \
   serjs/go-socks5-proxy
 
 LINK="socks5://g0rox:${PASS}@${IP}:1099"
-echo "$LINK" | tee /root/socks5.txt
 echo "[SUCCESS] Прокси запущен: $LINK"
