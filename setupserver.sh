@@ -1,4 +1,5 @@
 #!/bin/bash
+# test
 if ! command -v docker &>/dev/null; then
   echo "[INFO] Docker не найден, устанавливаю..."
   apt update && apt install -y docker.io
