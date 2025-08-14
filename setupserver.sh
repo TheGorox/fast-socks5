@@ -29,7 +29,7 @@ docker rm -f tinyproxy &>/dev/null
 # Создаем временный файл конфигурации Tinyproxy
 CONFIG_FILE=$(mktemp)
 cat <<EOF > "$CONFIG_FILE"
-Port 3128
+Port 2846
 Listen 0.0.0.0
 Timeout 600
 LogLevel Info
@@ -41,7 +41,7 @@ EOF
 
 # Запускаем контейнер с Tinyproxy
 docker run -d --name tinyproxy \
-  -p 3128:3128 \
+  -p 2846:2846 \
   -v "$CONFIG_FILE:/etc/tinyproxy/tinyproxy.conf" \
   vimagick/tinyproxy:latest
 
@@ -50,7 +50,7 @@ sleep 5
 
 # Проверяем, запустился ли контейнер
 if docker ps | grep -q tinyproxy; then
-  LINK="http://${IP}:3128"
+  LINK="http://g0rox:${PASS}@${IP}:2846"
   echo "[SUCCESS] HTTP-прокси (Tinyproxy) запущен: $LINK"
   echo "[INFO] Для теста используйте указанный адрес без аутентификации."
   echo "[INFO] Пароль (для включения аутентификации): g0rox:$PASS"
@@ -62,10 +62,10 @@ else
 fi
 
 # Проверка сетевой доступности порта
-if nc -zv 127.0.0.1 3128 &>/dev/null; then
-  echo "[INFO] Порт 3128 доступен локально"
+if nc -zv 127.0.0.1 2846 &>/dev/null; then
+  echo "[INFO] Порт 2846 доступен локально"
 else
-  echo "[ERROR] Порт 3128 недоступен локально, проверьте брандмауэр или конфигурацию Docker"
+  echo "[ERROR] Порт 2846 недоступен локально, проверьте брандмауэр или конфигурацию Docker"
 fi
 
 # Очищаем временный файл конфигурации
