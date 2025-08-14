@@ -12,53 +12,52 @@ if docker ps -a | grep -q socks5; then
   docker rm socks5 &>/dev/null
 fi
 
-# Генерация пароля без специальных символов (только буквы и цифры)
+# Остановка и удаление старого Squid контейнера, если он существует
+if docker ps -a | grep -q http-proxy; then
+  echo "[INFO] Обнаружен старый Squid контейнер, останавливаю и удаляю..."
+  docker stop http-proxy &>/dev/null
+  docker rm http-proxy &>/dev/null
+fi
+
+# Генерация пароля без специальных символов (на случай включения аутентификации)
 PASS=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 12)
 IP=$(hostname -I | awk '{print $1}')
 
-# Удаляем новый контейнер http-proxy, если он уже существует
-docker rm -f http-proxy &>/dev/null
+# Удаляем новый контейнер tinyproxy, если он уже существует
+docker rm -f tinyproxy &>/dev/null
 
-# Создаем временный файл конфигурации Squid
+# Создаем временный файл конфигурации Tinyproxy
 CONFIG_FILE=$(mktemp)
 cat <<EOF > "$CONFIG_FILE"
-http_port 3128
-# Аутентификация (закомментирована для теста без аутентификации)
-# auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
-# auth_param basic realm Proxy Authentication
-# acl authenticated proxy_auth REQUIRED
-# http_access allow authenticated
-http_access allow all
-# Логирование для диагностики
-access_log /var/log/squid/access.log squid
-cache_log /var/log/squid/cache.log
-# Разрешить все источники для теста
-acl all src 0.0.0.0/0
+Port 3128
+Listen 0.0.0.0
+Timeout 600
+LogLevel Info
+MaxClients 100
+# Аутентификация отключена для теста
+BasicAuth g0rox $PASS
+Allow 0.0.0.0/0
 EOF
 
-# Создаем файл с учетными данными (на случай, если аутентификация нужна)
-docker run --rm -v "$(pwd)":/mnt httpd:2.4 htpasswd -bc /mnt/passwd g0rox "$PASS"
-
-# Запускаем контейнер с HTTP-прокси
-docker run -d --name http-proxy \
+# Запускаем контейнер с Tinyproxy
+docker run -d --name tinyproxy \
   -p 3128:3128 \
-  -v "$CONFIG_FILE:/etc/squid/squid.conf" \
-  -v "$(pwd)/passwd:/etc/squid/passwd" \
-  sameersbn/squid:latest
+  -v "$CONFIG_FILE:/etc/tinyproxy/tinyproxy.conf" \
+  vimagick/tinyproxy:latest
 
-# Даем контейнеру больше времени на запуск
+# Даем контейнеру время на запуск
 sleep 5
 
 # Проверяем, запустился ли контейнер
-if docker ps | grep -q http-proxy; then
+if docker ps | grep -q tinyproxy; then
   LINK="http://${IP}:3128"
-  echo "[SUCCESS] HTTP-прокси запущен: $LINK"
-  echo "[INFO] Для теста без аутентификации используйте указанный адрес."
-  echo "[INFO] С аутентификацией: http://g0rox:${PASS}@${IP}:3128"
+  echo "[SUCCESS] HTTP-прокси (Tinyproxy) запущен: $LINK"
+  echo "[INFO] Для теста используйте указанный адрес без аутентификации."
+  echo "[INFO] Пароль (для включения аутентификации): g0rox:$PASS"
 else
-  echo "[ERROR] Не удалось запустить HTTP-прокси"
+  echo "[ERROR] Не удалось запустить HTTP-прокси (Tinyproxy)"
   echo "[INFO] Проверяю логи контейнера..."
-  docker logs http-proxy
+  docker logs tinyproxy
   exit 1
 fi
 
@@ -71,4 +70,3 @@ fi
 
 # Очищаем временный файл конфигурации
 rm -f "$CONFIG_FILE"
-rm -f "$(pwd)/passwd"
