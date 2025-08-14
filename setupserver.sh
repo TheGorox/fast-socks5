@@ -12,7 +12,8 @@ if docker ps -a | grep -q socks5; then
   docker rm socks5 &>/dev/null
 fi
 
-PASS=$(openssl rand -base64 12)
+# Генерация пароля без специальных символов (только буквы и цифры)
+PASS=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 12)
 IP=$(hostname -I | awk '{print $1}')
 
 # Удаляем новый контейнер http-proxy, если он уже существует
