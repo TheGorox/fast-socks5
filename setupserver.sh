@@ -23,15 +23,21 @@ docker rm -f http-proxy &>/dev/null
 CONFIG_FILE=$(mktemp)
 cat <<EOF > "$CONFIG_FILE"
 http_port 3128
-auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
-auth_param basic realm Proxy Authentication
-acl authenticated proxy_auth REQUIRED
-http_access allow authenticated
-http_access deny all
+# Аутентификация (закомментирована для теста без аутентификации)
+# auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
+# auth_param basic realm Proxy Authentication
+# acl authenticated proxy_auth REQUIRED
+# http_access allow authenticated
+http_access allow all
+# Логирование для диагностики
+access_log /var/log/squid/access.log squid
+cache_log /var/log/squid/cache.log
+# Разрешить все источники для теста
+acl all src 0.0.0.0/0
 EOF
 
-# Создаем файл с учетными данными
-docker run --rm -v "$(pwd)":/mnt busybox sh -c "echo 'g0rox:$(echo -n '$PASS' | openssl dgst -md5 -binary | openssl enc -base64)' > /mnt/passwd"
+# Создаем файл с учетными данными (на случай, если аутентификация нужна)
+docker run --rm -v "$(pwd)":/mnt httpd:2.4 htpasswd -bc /mnt/passwd g0rox "$PASS"
 
 # Запускаем контейнер с HTTP-прокси
 docker run -d --name http-proxy \
@@ -40,16 +46,27 @@ docker run -d --name http-proxy \
   -v "$(pwd)/passwd:/etc/squid/passwd" \
   sameersbn/squid:latest
 
-# Даем контейнеру время на запуск
-sleep 2
+# Даем контейнеру больше времени на запуск
+sleep 5
 
 # Проверяем, запустился ли контейнер
 if docker ps | grep -q http-proxy; then
-  LINK="http://g0rox:${PASS}@${IP}:3128"
+  LINK="http://${IP}:3128"
   echo "[SUCCESS] HTTP-прокси запущен: $LINK"
+  echo "[INFO] Для теста без аутентификации используйте указанный адрес."
+  echo "[INFO] С аутентификацией: http://g0rox:${PASS}@${IP}:3128"
 else
   echo "[ERROR] Не удалось запустить HTTP-прокси"
+  echo "[INFO] Проверяю логи контейнера..."
+  docker logs http-proxy
   exit 1
+fi
+
+# Проверка сетевой доступности порта
+if nc -zv 127.0.0.1 3128 &>/dev/null; then
+  echo "[INFO] Порт 3128 доступен локально"
+else
+  echo "[ERROR] Порт 3128 недоступен локально, проверьте брандмауэр или конфигурацию Docker"
 fi
 
 # Очищаем временный файл конфигурации
